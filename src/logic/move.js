@@ -1,10 +1,13 @@
 /**
  * @module move
  * @description Main move-decision module for the Battlesnake.
- * Orchestrates safety checks to choose a valid move each turn.
+ * Integrates safety checks, head-to-head collision avoidance, flood-fill space evaluation, and food seeking.
  */
 
 import { getAvoidWallMoves } from './safety.js';
+import { getFoodSeekingMoves } from './food.js';
+import { avoidHeadToHead } from './enemy.js';
+import { avoidSmallSpaces } from './space.js';
 
 /**
  * All possible move directions.
@@ -39,52 +42,6 @@ export function getNextPosition(position, move) {
 }
 
 /**
- * Chooses the best move for the snake given the current game state.
- * Eliminates unsafe moves (walls, self-body, other snakes) and picks
- * from the remaining safe options.
- *
- * @param {Object} gameState - The game state from the Battlesnake engine.
- * @param {Object} gameState.board - The board state (width, height, snakes, food).
- * @param {Object} gameState.you - The player's snake data.
- * @returns {string} The chosen move direction ('up', 'down', 'left', or 'right').
- */
-export function chooseMove(gameState) {
-  const myHead = gameState.you.head;
-
-  // Start with all four possible moves
-  let safeMoves = [...ALL_MOVES];
-
-  // Step 1: Remove moves that would hit walls
-  safeMoves = getAvoidWallMoves(
-    safeMoves,
-    myHead,
-    gameState.board.width,
-    gameState.board.height
-  );
-
-  // Step 2: Remove moves that would hit our own body
-  safeMoves = avoidSnakeBody(safeMoves, myHead, gameState.you.body);
-
-  // Step 3: Remove moves that would hit other snakes
-  const otherSnakes = gameState.board.snakes.filter(
-    (snake) => snake.id !== gameState.you.id
-  );
-  for (const snake of otherSnakes) {
-    safeMoves = avoidSnakeBody(safeMoves, myHead, snake.body);
-  }
-
-  // If no safe moves remain, go up as a last resort
-  if (safeMoves.length === 0) {
-    console.log('No safe moves detected! Moving up as last resort.');
-    return 'up';
-  }
-
-  // Pick a random safe move for now (will be improved in Stage 2)
-  const chosenMove = safeMoves[Math.floor(Math.random() * safeMoves.length)];
-  return chosenMove;
-}
-
-/**
  * Filters out moves that would cause the snake to collide with a body.
  * Works for both self-collision and other-snake collision avoidance.
  *
@@ -97,11 +54,79 @@ export function avoidSnakeBody(possibleMoves, head, body) {
   return possibleMoves.filter((move) => {
     const nextPos = getNextPosition(head, move);
 
-    // Check if the next position overlaps any body segment
     const collidesWithBody = body.some(
       (segment) => segment.x === nextPos.x && segment.y === nextPos.y
     );
 
     return !collidesWithBody;
   });
+}
+
+/**
+ * Chooses the best move for the snake given the current game state.
+ * Evaluates safety through a pipeline of logic filters:
+ * 1. Avoid walls
+ * 2. Avoid self-body
+ * 3. Avoid other snake bodies
+ * 4. Avoid head-to-head collisions with larger/equal enemies
+ * 5. Avoid trapped dead-ends (flood-fill space evaluation)
+ * 6. Seek food if hungry or safe
+ *
+ * @param {Object} gameState - The game state from the Battlesnake engine.
+ * @returns {string} The chosen move direction ('up', 'down', 'left', or 'right').
+ */
+export function chooseMove(gameState) {
+  const myHead = gameState.you.head;
+  const myLength = gameState.you.length;
+  const myHealth = gameState.you.health;
+  const boardWidth = gameState.board.width;
+  const boardHeight = gameState.board.height;
+
+  // Pipeline Step 1: Wall collision avoidance
+  let safeMoves = getAvoidWallMoves(
+    [...ALL_MOVES],
+    myHead,
+    boardWidth,
+    boardHeight
+  );
+
+  // Pipeline Step 2: Self body avoidance
+  safeMoves = avoidSnakeBody(safeMoves, myHead, gameState.you.body);
+
+  // Pipeline Step 3: Other snake body avoidance
+  const otherSnakes = gameState.board.snakes.filter(
+    (snake) => snake.id !== gameState.you.id
+  );
+  for (const snake of otherSnakes) {
+    safeMoves = avoidSnakeBody(safeMoves, myHead, snake.body);
+  }
+
+  // Fallback check: If no safe moves, pick 'up' as last resort
+  if (safeMoves.length === 0) {
+    console.log('No safe moves detected! Moving up as last resort.');
+    return 'up';
+  }
+
+  // Pipeline Step 4: Head-to-head avoidance against equal or larger snakes
+  safeMoves = avoidHeadToHead(safeMoves, myHead, myLength, otherSnakes);
+
+  // Pipeline Step 5: Flood-fill space evaluation (avoid dead ends smaller than body length)
+  safeMoves = avoidSmallSpaces(
+    safeMoves,
+    myHead,
+    boardWidth,
+    boardHeight,
+    gameState.board.snakes,
+    myLength
+  );
+
+  // Pipeline Step 6: Food-seeking logic
+  // Prioritise food if health is below 50 or food exists
+  if (myHealth < 50 || gameState.board.food.length > 0) {
+    safeMoves = getFoodSeekingMoves(safeMoves, myHead, gameState.board.food);
+  }
+
+  // Pick candidate move
+  const chosenMove = safeMoves[Math.floor(Math.random() * safeMoves.length)];
+  return chosenMove;
 }
