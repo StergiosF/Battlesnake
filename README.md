@@ -72,6 +72,29 @@ The decision engine uses a deterministic, multi-stage filtering pipeline to eval
 | **Space Logic** | `src/logic/space.js` | Uses Breadth-First Search (BFS) flood fill to prevent moving into trapped dead-ends. |
 | **Food Logic** | `src/logic/food.js` | Calculates Manhattan distance to steer towards nearest food when hungry or safe. |
 
+### Repository Structure
+
+```
+Battlesnake/
+├── .github/workflows/ci.yml   # GitHub Actions: lint, format, tests
+├── src/
+│   ├── index.js               # Entry point and snake appearance
+│   ├── server.js              # Express Battlesnake API
+│   └── logic/
+│       ├── move.js            # Decision pipeline
+│       ├── safety.js          # Wall collision checks
+│       ├── enemy.js           # Head-to-head avoidance
+│       ├── space.js           # BFS flood-fill
+│       └── food.js            # Food-seeking heuristic
+├── tests/                     # Jest unit tests per module
+├── .editorconfig
+├── .eslintrc.json
+├── .prettierrc.json
+├── jest.config.js
+├── package.json
+└── README.md
+```
+
 ---
 
 ## 📡 API Endpoints
@@ -107,6 +130,26 @@ All files  |   92.45 |       86 |   95.65 |    93.2 |
  space.js  |   88.88 |    86.66 |   83.33 |   91.42 |                   
 -----------|---------|----------|---------|---------|-------------------
 ```
+
+`src/index.js` and `src/server.js` are excluded from the coverage report. The 93.2% figure is for the decision-logic modules only.
+
+---
+
+## 📚 Code Documentation
+
+All application modules are documented with **JSDoc**. Each file has an `@module` block, and every exported function documents its parameters and return value.
+
+| Module | File |
+| :--- | :--- |
+| Server | `src/server.js` |
+| Entry point | `src/index.js` |
+| Move pipeline | `src/logic/move.js` |
+| Wall safety | `src/logic/safety.js` |
+| Enemy logic | `src/logic/enemy.js` |
+| Flood-fill | `src/logic/space.js` |
+| Food seeking | `src/logic/food.js` |
+
+Open those files in the editor to read the JSDoc next to the implementation.
 
 ---
 
@@ -161,8 +204,21 @@ npm run format
 
 This project followed strict software development practices:
 - **Git Flow:** Feature branching model with `main`, `develop`, and `feature/*` branches.
-- **Agile Management:** Tracked via GitHub Projects board with user stories, acceptance criteria, and milestones across 3 iterative stages.
-- **Continuous Integration:** Automated build, linting, and testing pipeline via GitHub Actions.
+- **Agile Management:** Tracked via GitHub issues, acceptance criteria, and [three milestones](https://github.com/StergiosF/Battlesnake/milestones?state=all).
+- **Continuous Integration:** Automated linting, formatting, and tests via [GitHub Actions](https://github.com/StergiosF/Battlesnake/actions/workflows/ci.yml).
+- **Release:** Production tag [v1.0.0](https://github.com/StergiosF/Battlesnake/releases/tag/v1.0.0).
+
+---
+
+## ⚠️ Known Limitations
+
+- Food-seeking uses Manhattan distance to the nearest food. It does not path around obstacles, so the snake can walk toward food that is actually blocked.
+- Flood-fill treats other snakes as static obstacles for that turn. It does not simulate enemy movement or tail shrinkage.
+- If every filtered move is unsafe, the snake falls back to `up`, which can still be a wall or body collision.
+- Among remaining candidate moves the snake picks at random, so two identical game states can produce different moves.
+- Hazard squares from the Battlesnake engine are ignored.
+- `src/index.js` and `src/server.js` are excluded from the Jest coverage report. The 93.2% figure is for the decision-logic modules only.
+- There is no lookahead or minimax. The snake is a single-turn filter pipeline, not a search agent.
 
 ---
 
